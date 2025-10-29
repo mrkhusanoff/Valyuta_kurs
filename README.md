@@ -1,10 +1,15 @@
 # Valyuta_kurs
-Daily currency value[README.md](https://github.com/user-attachments/files/23210570/README.md)# 💱 O‘zbekiston Bank Valyuta Kurslari Telegram Boti (.env bilan)
+Daily currency value
+[README.md](https://github.com/user-attachments/files/23210570/README.md)# 💱 O‘zbekiston Bank Valyuta Kurslari Telegram Boti (.env bilan)
 
 Bu versiyada bot tokeni `.env` fayl orqali yuklanadi.
 
 ## 🧰 O‘rnatish
 ```
+aiogram==2.25.1
+requests==2.31.0
+python-dotenv==1.0.1
+
 pip install -r requirements.txt
 ```
 
