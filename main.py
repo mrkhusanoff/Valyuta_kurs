@@ -3,64 +3,70 @@ import requests
 from aiogram import Bot, Dispatcher, executor, types
 from dotenv import load_dotenv
 
-# .env fayldan BOT_TOKEN ni olish
+# .env dan tokenni o'qish
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise RuntimeError("❌ BOT_TOKEN topilmadi. .env faylni tekshiring!")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-# Markaziy bank API manzili
+# CBU API manzili
 CBU_API = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
 
-@dp.message_handler(commands=['start', 'help'])
-async def start_cmd(message: types.Message):
-    text = (
-        "👋 Assalomu alaykum!\n"
-        "Men sizga O‘zbekiston Respublikasi Markaziy bankining bugungi valyuta kurslarini ko‘rsataman.\n\n"
-        "💱 Quyidagi komandalarni sinab ko‘ring:\n"
-        "• /kurs — Asosiy valyutalar (USD, EUR, RUB)\n"
-        "• /kurs USD — faqat dollar kursi\n"
-        "• /kurs EUR — faqat yevro kursi\n"
-        "• /kurs RUB — faqat rubl kursi"
-    )
-    await message.answer(text)
-
-@dp.message_handler(commands=['kurs'])
-async def kurs_cmd(message: types.Message):
-    args = message.get_args().upper()  # foydalanuvchi kiritgan valyuta kodi, masalan USD
-
+def get_cbu_rates():
+    """CBU API'dan bugungi kurslarni olish."""
     try:
-        response = requests.get(CBU_API)
+        response = requests.get(CBU_API, timeout=10)
         response.raise_for_status()
-        data = response.json()
+        return response.json()
     except Exception as e:
-        await message.answer("⚠️ Ma’lumotlarni olishda xatolik yuz berdi.")
-        print("Xato:", e)
-        return
+        print("Xatolik:", e)
+        return None
 
-    if args:
-        # Agar foydalanuvchi /kurs USD deb yozsa
-        for valyuta in data:
-            if valyuta["Ccy"] == args:
-                await message.answer(
-                    f"💵 <b>{valyuta['CcyNm_UZ']}</b>\n"
-                    f"1 {valyuta['Ccy']} = {valyuta['Rate']} so‘m\n"
-                    f"📅 Sana: {valyuta['Date']}",
-                    parse_mode="HTML"
-                )
-                return
-        await message.answer("❌ Bunday valyuta topilmadi. Masalan: /kurs USD")
-    else:
-        # Asosiy valyutalar: USD, EUR, RUB
-        asosiy = ['USD', 'EUR', 'RUB']
-        text = "💱 <b>Bugungi valyuta kurslari:</b>\n\n"
-        for valyuta in data:
-            if valyuta["Ccy"] in asosiy:
-                text += f"{valyuta['Ccy']}: {valyuta['Rate']} so‘m\n"
-        text += f"\n📅 Sana: {data[0]['Date']}"
+def format_rates(data):
+    """Valyuta kurslarini chiroyli formatda chiqaradi."""
+    if not data:
+        return "⚠️ Kurslarni olishda xatolik yuz berdi."
+    lines = []
+    date = data[0].get("Date") if data else "—"
+    lines.append(f"💱 <b>Bugungi valyuta kurslari</b>\n📅 Sana: {date}\n")
+    for v in data:
+        ccy = v.get("Ccy")
+        name = v.get("CcyNm_UZ")
+        rate = v.get("Rate")
+        nominal = v.get("Nominal")
+        lines.append(f"<b>{ccy}</b> — {name}\n1 × {nominal} {ccy} = {rate} so‘m\n")
+    return "\n".join(lines)
+
+# /start komandasi — tugmali menyu bilan
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("📊 Bugungi kurslar")
+    await message.answer(
+        "👋 Assalomu alaykum!\n\n"
+        "Men sizga O‘zbekiston Markaziy Bankining bugungi valyuta kurslarini ko‘rsataman.\n\n"
+        "Quyidagi tugmani bosing 👇",
+        reply_markup=keyboard
+    )
+
+# Tugma bosilganda — kurslarni ko‘rsatish
+@dp.message_handler(lambda msg: msg.text == "📊 Bugungi kurslar")
+async def show_all_rates(message: types.Message):
+    await message.answer("⏳ Kurslar yuklanmoqda...")
+    data = get_cbu_rates()
+    text = format_rates(data)
+    MAX_LEN = 4000
+    if len(text) <= MAX_LEN:
         await message.answer(text, parse_mode="HTML")
+    else:
+        # agar matn uzun bo‘lsa, bo‘lib yuborish
+        for i in range(0, len(text), MAX_LEN):
+            await message.answer(text[i:i+MAX_LEN], parse_mode="HTML")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print("🤖 Bot ishga tushdi...")
     executor.start_polling(dp, skip_updates=True)
