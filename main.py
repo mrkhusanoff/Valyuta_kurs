@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 from aiogram import Bot, Dispatcher, executor, types
 from dotenv import load_dotenv
 
-
 # .env dan tokenni o'qish
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
