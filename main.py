@@ -9,6 +9,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
+
 # Bank ma'lumotlari (statik)
 BANK_DATA = {
     "anor": {"USD_buy": 12080, "USD_sell": 12215, "RUB_buy": 135, "RUB_sell": 140},
