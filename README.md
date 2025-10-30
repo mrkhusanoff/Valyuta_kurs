@@ -24,5 +24,5 @@ Railway yoki Render’da esa bu qiymatni “Environment Variables” bo‘limida
 ```
 python main.py
 ```
-
+proc.file
 
