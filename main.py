@@ -10,10 +10,10 @@ from telegram.ext import (
     filters,
 )
 
-# 🔑 Bot tokeningizni shu yerga yozing
+# 🔑 Telegram bot tokeningizni shu yerga yozing
 TOKEN = "YOUR_BOT_TOKEN_HERE"
 
-# 🏦 Banklar kurslari (misol uchun)
+# 🏦 Bank kurslari (misol uchun)
 BANK_RATES = {
     "Kapitalbank": {"USD": 12170, "RUB": 155},
     "Hamkorbank": {"USD": 12090, "RUB": 150},
@@ -40,30 +40,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-
-# 📲 Tugmalar uchun handler
+# 📲 Tugmalarni boshqaruvchi funksiya
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     if query.data == "kurslar":
-        text = (
-            "🏦 Iltimos, bank nomini kiriting:\n"
-            "(Masalan: Kapitalbank, Hamkorbank, Xalq Bank, Anorbank ...)"
-        )
         context.user_data["mode"] = "kurslar"
-        await query.edit_message_text(text=text)
+        await query.edit_message_text(
+            "🏦 Iltimos, bank nomini kiriting:\n(Masalan: Xalq Bank, Anorbank, Agrobank...)"
+        )
 
     elif query.data == "kalkulyator":
-        text = (
-            "🧮 Kalkulyator rejimi yoqildi.\n\n"
-            "Masalan:\n"
-            "👉 `100 USD @ Kapitalbank`\n"
-            "👉 `5000 RUB @ Anorbank`"
-        )
         context.user_data["mode"] = "kalkulyator"
-        await query.edit_message_text(text=text)
-
+        await query.edit_message_text(
+            "🧮 Kalkulyator rejimi yoqildi.\n\nMisollar:\n"
+            "`100 USD @ Xalq Bank`\n"
+            "`5000 RUB @ Anorbank`"
+        )
 
 # 💬 Xabarlar uchun handler
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -84,7 +78,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
         await update.message.reply_text("❌ Bunday bank topilmadi. Iltimos, to‘liq nomini yozing.")
 
-    # 🧮 Kalkulyator
+    # 🧮 Kalkulyator funksiyasi
     elif mode == "kalkulyator":
         try:
             amt_str, cur_bank = text.split("@")
@@ -110,13 +104,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(e)
             await update.message.reply_text(
-                "❌ Format xato.\nTo‘g‘ri yozish misollari:\n"
+                "❌ Format xato.\nMisollar:\n"
                 "`100 USD @ Xalq Bank`\n`5000 RUB @ Anorbank`"
             )
 
     else:
         await update.message.reply_text("ℹ️ Avval /start buyrug‘ini yuboring.")
-
 
 # 🚀 Botni ishga tushirish
 async def main():
@@ -128,7 +121,6 @@ async def main():
 
     print("🤖 Bot ishga tushdi...")
     await app.run_polling()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
