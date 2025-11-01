@@ -1,66 +1,118 @@
-import os
-import requests
-from aiogram import Bot, Dispatcher, executor, types
-from dotenv import load_dotenv
+import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# .env fayldan BOT_TOKEN ni olish
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# 🔑 Telegram tokeningizni shu yerga yozing
+TOKEN = "YOUR_BOT_TOKEN_HERE"
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot)
+# 🏦 Banklar va ularning kurslari (misol uchun)
+BANK_RATES = {
+    "Kapitalbank": {"USD": 12170, "RUB": 155},
+    "Hamkorbank": {"USD": 12090, "RUB": 150},
+    "Ipak Yo‘li Bank": {"USD": 12100, "RUB": 152},
+    "Agrobank": {"USD": 12050, "RUB": 148},
+    "Asia Alliance Bank": {"USD": 12080, "RUB": 151},
+    "TBC Bank": {"USD": 12120, "RUB": 153},
+    "Xalq Bank": {"USD": 12040, "RUB": 149},
+    "Anorbank": {"USD": 12110, "RUB": 154},
+}
 
-# Markaziy bank API manzili
-CBU_API = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
-
-@dp.message_handler(commands=['start', 'help'])
-async def start_cmd(message: types.Message):
-    text = (
-        "👋 Assalomu alaykum!\n"
-        "Men sizga O‘zbekiston Respublikasi Markaziy bankining bugungi valyuta kurslarini ko‘rsataman.\n\n"
-        "💱 Quyidagi komandalarni sinab ko‘ring:\n"
-        "• /kurs — Asosiy valyutalar (USD, EUR, RUB)\n"
-        "• /kurs USD — faqat dollar kursi\n"
-        "• /kurs EUR — faqat yevro kursi\n"
-        "• /kurs RUB — faqat rubl kursi"
+# 🎬 /start komandasi
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("📊 Bank kurslari", callback_data="kurslar")],
+        [InlineKeyboardButton("🧮 Kalkulyator", callback_data="kalkulyator")]
+    ]
+    await update.message.reply_text(
+        "👋 Assalomu alaykum!\nValyuta botiga xush kelibsiz.\n\nBo‘limni tanlang:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
-    await message.answer(text)
 
-@dp.message_handler(commands=['kurs'])
-async def kurs_cmd(message: types.Message):
-    args = message.get_args().upper()  # foydalanuvchi kiritgan valyuta kodi, masalan USD
+# 📲 Inline tugmalarni ishlovchi
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    try:
-        response = requests.get(CBU_API)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as e:
-        await message.answer("⚠️ Ma’lumotlarni olishda xatolik yuz berdi.")
-        print("Xato:", e)
-        return
+    if query.data == "kurslar":
+        text = (
+            "🏦 Iltimos, bank nomini kiriting:\n"
+            "(Masalan: Kapitalbank, Hamkorbank, Xalq Bank, Anorbank ...)"
+        )
+        context.user_data["kurs_mode"] = True
+        context.user_data["calc_mode"] = False
+        await query.edit_message_text(text=text)
 
-    if args:
-        # Agar foydalanuvchi /kurs USD deb yozsa
-        for valyuta in data:
-            if valyuta["Ccy"] == args:
-                await message.answer(
-                    f"💵 <b>{valyuta['CcyNm_UZ']}</b>\n"
-                    f"1 {valyuta['Ccy']} = {valyuta['Rate']} so‘m\n"
-                    f"📅 Sana: {valyuta['Date']}",
-                    parse_mode="HTML"
+    elif query.data == "kalkulyator":
+        text = (
+            "🧮 Kalkulyator rejimi yoqildi.\n\n"
+            "Masalan:\n"
+            "👉 `100 USD @ Kapitalbank`\n"
+            "👉 `5000 RUB @ Anorbank`"
+        )
+        context.user_data["calc_mode"] = True
+        context.user_data["kurs_mode"] = False
+        await query.edit_message_text(text=text)
+
+# 💬 Xabarlar uchun handler
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+
+    # 🏦 Bank kursini ko‘rsatish
+    if context.user_data.get("kurs_mode"):
+        for bank in BANK_RATES:
+            if text.lower() in bank.lower():
+                rates = BANK_RATES[bank]
+                reply = (
+                    f"🏦 {bank}\n\n"
+                    f"💵 1 USD = {rates['USD']} so‘m\n"
+                    f"₽ 1 RUB = {rates['RUB']} so‘m"
                 )
+                await update.message.reply_text(reply)
                 return
-        await message.answer("❌ Bunday valyuta topilmadi. Masalan: /kurs USD")
+        await update.message.reply_text("❌ Bunday bank topilmadi. Iltimos, to‘liq nomini yozing.")
+
+    # 🧮 Kalkulyator funksiyasi
+    elif context.user_data.get("calc_mode"):
+        try:
+            amt_str, cur_bank = text.split("@")
+            amt_str = amt_str.strip()
+            cur_bank = cur_bank.strip()
+            amount, currency = amt_str.split()
+            amount = float(amount)
+            currency = currency.upper()
+
+            if cur_bank not in BANK_RATES:
+                await update.message.reply_text("❌ Bunday bank topilmadi.")
+                return
+
+            if currency not in ("USD", "RUB"):
+                await update.message.reply_text("⚠️ Faqat USD yoki RUB ishlaydi.")
+                return
+
+            rate = BANK_RATES[cur_bank][currency]
+            result = amount * rate
+            await update.message.reply_text(
+                f"{amount} {currency} @ {cur_bank} = {result:,.2f} so‘m"
+            )
+        except Exception:
+            await update.message.reply_text(
+                "❌ Format xato.\nTo‘g‘ri yozish misollari:\n"
+                "`100 USD @ Xalq Bank`\n`5000 RUB @ Anorbank`"
+            )
     else:
-        # Asosiy valyutalar: USD, EUR, RUB
-        asosiy = ['USD', 'EUR', 'RUB']
-        text = "💱 <b>Bugungi valyuta kurslari:</b>\n\n"
-        for valyuta in data:
-            if valyuta["Ccy"] in asosiy:
-                text += f"{valyuta['Ccy']}: {valyuta['Rate']} so‘m\n"
-        text += f"\n📅 Sana: {data[0]['Date']}"
-        await message.answer(text, parse_mode="HTML")
+        await update.message.reply_text("ℹ️ Avval /start buyrug‘ini yuboring.")
+
+# 🚀 Botni ishga tushirish
+def main():
+    logging.basicConfig(level=logging.INFO)
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+
+    print("🤖 Bot ishga tushdi...")
+    app.run_polling()
 
 if __name__ == "__main__":
-    print("🤖 Bot ishga tushdi...")
-    executor.start_polling(dp, skip_updates=True)
+    main()
